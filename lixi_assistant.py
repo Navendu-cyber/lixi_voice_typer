@@ -11,17 +11,17 @@ import numpy as np # For pvporcupine audio processing
 # --- Configuration ---
 AWAKE_SOUND_FILE = "gemini_awake.wav" # Ensure this file is in the same directory as this script
 # For Hotword Detection (pvporcupine)
-HOTWORD_ENABLED = False # Set to True if you want to use a wake word (e.g., "Lixi")
+HOTWORD_ENABLED = True # Set to True if you want to use a wake word (e.g., "Lixi")
 # You NEED to replace 'YOUR_PICOVOICE_ACCESS_KEY' with your actual key from Picovoice Console
-PICOVOICE_ACCESS_KEY = "YOUR_PICOVOICE_ACCESS_KEY"
+PICOVOICE_ACCESS_KEY = "PWZ3iU+HC4lag3Tn13N6/z/1XTC4SQ/4CsRS4fUedmV/j7F8Hhh6Xw=="
 # You NEED to replace 'path/to/your/gemini_linux.ppn' with the actual path to your .ppn file
 # Download from Picovoice Console, often found within their SDK in resources/keyword_files/linux/
-KEYWORD_FILE_PATH = "path/to/your/gemini_linux.ppn"
-HOTWORD = "lixi" # Your desired wake word (lowercase). Make sure you download/generate a .ppn file for this word.
+KEYWORD_FILE_PATH = "/home/navendu/Desktop/Lixi_assistant/hey-friday_en_linux_v3_0_0/hey-friday_en_linux_v3_0_0.ppn"
+HOTWORD = "hey friday" # Your desired wake word (lowercase). Make sure you download/generate a .ppn file for this word.
 
 # For Google Gemini API interaction
 # You NEED to replace 'YOUR_GEMINI_API_KEY' with your actual API key from Google AI Studio
-GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"
+GEMINI_API_KEY = "AIzaSyAfm1lXZXrOwTbCONxcy0efkEt5szTXOFY"
 
 # --- Initialize Components ---
 recognizer = sr.Recognizer()
@@ -165,56 +165,76 @@ def process_command(command_text):
         speak_response("Gemini API is not configured. I can only handle local commands.")
 
 # --- Main Voice Assistant Loop ---
-def start_lixi_assistant():
-    print("\n--- Lixi Voice Assistant Started ---")
-    if HOTWORD_ENABLED:
-        global porcupine # Declare global to clean up later
-        global hotword_detected # Flag to signal detection
+# ... (rest of the code above this function remains the same)
 
+    # --- Main Voice Assistant Loop ---
+    def start_lixi_assistant():
+        print("\n--- Lixi Voice Assistant Started ---")
+
+        # Initialize hotword_detected within the scope of start_llixi_assistant
+        # This is CRUCIAL for `nonlocal` in hotword_callback
         hotword_detected = False
+
+        # Ensure porcupine is defined if HOTWORD_ENABLED is True, otherwise it might be undefined
+        porcupine = None # Initialize to None
+
         try:
-            # Check for Porcupine AccessKey and Keyword Path
-            if PICOVOICE_ACCESS_KEY == "YOUR_PICOVOICE_ACCESS_KEY":
-                print("ERROR: Picovoice AccessKey not set. Hotword detection will not work.")
-                HOTWORD_ENABLED = False
-            elif not os.path.exists(KEYWORD_FILE_PATH):
-                print(f"ERROR: Hotword keyword file not found at {KEYWORD_FILE_PATH}. Hotword detection will not work.")
-                HOTWORD_ENABLED = False
-
             if HOTWORD_ENABLED:
-                porcupine = pvporcupine.create(
-                    access_key=PICOVOICE_ACCESS_KEY,
-                    keyword_paths=[KEYWORD_FILE_PATH]
-                )
-                print(f"Listening for wake word '{HOTWORD}'...")
-                speak_response(f"Hello, I am Lixi. Waiting for {HOTWORD}.")
+                # Check for Porcupine AccessKey and Keyword Path
+                if PICOVOICE_ACCESS_KEY == "YOUR_PICOVOICE_ACCESS_KEY":
+                    print("ERROR: Picovoice AccessKey not set. Hotword detection will not work.")
+                    HOTWORD_ENABLED = False
+                elif not os.path.exists(KEYWORD_FILE_PATH):
+                    print(f"ERROR: Hotword keyword file not found at {KEYWORD_FILE_PATH}. Hotword detection will not work.")
+                    HOTWORD_ENABLED = False
 
-                def hotword_callback(indata, frames, time_info, status):
-                    nonlocal hotword_detected # For Python 3.x, use nonlocal for outer scope variable
-                    if status:
-                        print(status)
-                    pcm = indata.flatten().astype(np.int16)
-                    result = porcupine.process(pcm)
-                    if result >= 0:
-                        print(f"Wake word '{HOTWORD}' detected!")
-                        hotword_detected = True
+                if HOTWORD_ENABLED:
+                    porcupine = pvporcupine.create(
+                        access_key=PICOVOICE_ACCESS_KEY,
+                        keyword_paths=[KEYWORD_FILE_PATH]
+                    )
+                    print(f"Listening for wake word '{HOTWORD}'...")
+                    speak_response(f"Hello, I am Lixi. Waiting for {HOTWORD}.")
 
-                with sd.InputStream(
-                    channels=1,
-                    samplerate=porcupine.sample_rate,
-                    blocksize=porcupine.frame_length,
-                    callback=hotword_callback
-                ):
-                    while True:
-                        if hotword_detected:
-                            play_sound(AWAKE_SOUND_FILE)
-                            speak_response("Yes?")
-                            command = get_speech_input()
-                            if process_command(command) == "exit_app":
-                                break
-                            hotword_detected = False # Reset for next detection
-                            speak_response(f"Waiting for {HOTWORD}.")
-                        time.sleep(0.1) # Small delay to prevent busy-waiting
+                    def hotword_callback(indata, frames, time_info, status):
+                        nonlocal hotword_detected # This now correctly refers to the hotword_detected initialized above
+                        if status:
+                            print(status)
+                        pcm = indata.flatten().astype(np.int16)
+                        result = porcupine.process(pcm)
+                        if result >= 0:
+                            print(f"Wake word '{HOTWORD}' detected!")
+                            hotword_detected = True # Modify the variable in the enclosing scope
+
+                    with sd.InputStream(
+                        channels=1,
+                        samplerate=porcupine.sample_rate,
+                        blocksize=porcupine.frame_length,
+                        callback=hotword_callback
+                    ):
+                        while True:
+                            if hotword_detected:
+                                play_sound(AWAKE_SOUND_FILE)
+                                speak_response("Yes?")
+                                command = get_speech_input()
+                                if process_command(command) == "exit_app":
+                                    break
+                                hotword_detected = False # Reset for next detection
+                                speak_response(f"Waiting for {HOTWORD}.")
+                            time.sleep(0.1) # Small delay to prevent busy-waiting
+
+            # If hotword is not enabled, or if it failed to start, run in single-command mode
+            if not HOTWORD_ENABLED:
+                print("Running in single-command mode (triggered by shortcut).")
+                play_sound(AWAKE_SOUND_FILE)
+                speak_response("Yes?")
+                command = get_speech_input()
+                process_command(command)
+                # In shortcut mode, the script exits after one command,
+                # so the shortcut needs to be pressed again for the next command.
+                # To make it truly continuous in shortcut mode, you'd need to loop this
+                # and manage the Konsole input focus carefully, which is harder.
+                # The hotword method is better for continuous hands-free operation.
 
         except pvporcupine.PorcupineError as e:
             print(f"Porcupine error: {e}")
@@ -224,36 +244,11 @@ def start_lixi_assistant():
             print(f"An unexpected error occurred in hotword detection: {e}")
             HOTWORD_ENABLED = False # Disable hotword if error
         finally:
-            if 'porcupine' in locals() and porcupine is not None:
+            if porcupine is not None: # Check if it was successfully created before deleting
                 porcupine.delete()
-
-    # If hotword is not enabled, or if it failed to start, run in single-command mode
-    if not HOTWORD_ENABLED:
-        print("Running in single-command mode (triggered by shortcut).")
-        play_sound(AWAKE_SOUND_FILE)
-        speak_response("Yes?")
-        command = get_speech_input()
-        process_command(command)
-        # In shortcut mode, the script exits after one command,
-        # so the shortcut needs to be pressed again for the next command.
-        # To make it truly continuous in shortcut mode, you'd need to loop this
-        # and manage the Konsole input focus carefully, which is harder.
-        # The hotword method is better for continuous hands-free operation.
-
-    print("--- Lixi Voice Assistant Finished ---")
+            print("--- Lixi Voice Assistant Finished ---")
 
 
-if __name__ == "__main__":
-    # Ensure 'paplay' and 'spd-say' are installed if you want sound/speech feedback
-    # You can install them: sudo apt install pulseaudio-utils speech-dispatcher
-
-    # Install google-generativeai library if not already installed (for direct API interaction)
-    try:
-        import google.generativeai
-    except ImportError:
-        print("Installing google-generativeai library...")
-        subprocess.run(["pip", "install", "google-generativeai"], check=True)
-        print("google-generativeai installed. Please restart the script.")
-        exit() # Exit to allow the new import to take effect
-
-    start_lixi_assistant()
+    if __name__ == "__main__":
+        # ... (rest of __main__ block remains the same)
+        start_lixi_assistant()
